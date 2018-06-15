@@ -162,7 +162,7 @@ public abstract class AbstractScanner implements Closeable {
     public void onDestroy() {
         if (getUserNum() <= 0) {
             try {
-                Log.i(TAG, "onDestroy call with no users, releasing resources");
+                Log.i(TAG, "onDestroy called with no users, releasing resources");
                 close();
             } catch (IOException e) {
                 e.printStackTrace();

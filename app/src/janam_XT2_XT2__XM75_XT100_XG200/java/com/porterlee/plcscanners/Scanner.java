@@ -35,7 +35,8 @@ class Scanner extends AbstractScanner {
                 if (DECODE_RESULT != null) {
                     getScanner().aDecodeGetResult(DECODE_RESULT.recycle());
                     if (!READ_FAIL_SYMBOL.equals(DECODE_RESULT.symName)) {
-                        onBarcodeScanned(DECODE_RESULT.toString());
+                        String barcode = DECODE_RESULT.toString();
+                        onBarcodeScanned(barcode == null ? "" : barcode);
                     }
                 }
             } catch (RemoteException | SecurityException | NoClassDefFoundError e) {

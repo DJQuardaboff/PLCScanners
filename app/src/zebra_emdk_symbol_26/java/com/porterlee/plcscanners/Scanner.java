@@ -58,7 +58,8 @@ class Scanner extends AbstractScanner {
                                 @Override
                                 public void onData(ScanDataCollection scanDataCollection) {
                                     if (ScannerResults.SUCCESS.equals(scanDataCollection.getResult())) {
-                                        onBarcodeScanned(scanDataCollection.getScanData().get(0).getData());
+                                        String barcode = scanDataCollection.getScanData().get(0).getData();
+                                        onBarcodeScanned(barcode == null ? "" : barcode);
                                     } else {
                                         onScanComplete(false);
                                     }
