@@ -1,7 +1,11 @@
 package com.porterlee.plcscanners;
 
+import android.support.annotation.NonNull;
+import android.util.Log;
+
 import com.symbol.emdk.EMDKManager;
 import com.symbol.emdk.EMDKResults;
+import com.symbol.emdk.ProfileManager;
 import com.symbol.emdk.barcode.BarcodeManager;
 import com.symbol.emdk.barcode.ScanDataCollection;
 import com.symbol.emdk.barcode.ScannerException;
@@ -16,7 +20,7 @@ class Scanner extends AbstractScanner {
 
     @Override
     public boolean init() {
-        return getEmdkManager() == EMDKResults.STATUS_CODE.SUCCESS;
+        return emdkManager != null || getEmdkManager() == EMDKResults.STATUS_CODE.SUCCESS;
     }
 
     private EMDKResults.STATUS_CODE getEmdkManager() {
@@ -60,9 +64,7 @@ class Scanner extends AbstractScanner {
                                     }
                                 }
                             });
-                            getScanner().triggerType = com.symbol.emdk.barcode.Scanner.TriggerType.HARD;
-                            if (!getScanner().isReadPending())
-                                getScanner().read();
+                            onIsEnabledChanged(getIsEnabled());
                         } catch (ScannerException e) {
                             e.printStackTrace();
                         }
@@ -93,22 +95,19 @@ class Scanner extends AbstractScanner {
     }
 
     @Override
-    public void enable() {
-        getScanner().triggerType = com.symbol.emdk.barcode.Scanner.TriggerType.HARD;
+    public void onIsEnabledChanged(boolean isEnabled) {
         try {
-            if (!getScanner().isReadPending())
-                getScanner().read();
-        } catch (ScannerException e) {
-            e.printStackTrace();
-        }
-    }
-
-    @Override
-    public void disable() {
-        getScanner().triggerType = com.symbol.emdk.barcode.Scanner.TriggerType.SOFT_ALWAYS;
-        try {
-            if (getScanner().isReadPending())
-                getScanner().cancelRead();
+            if (isEnabled) {
+                getScanner().triggerType = com.symbol.emdk.barcode.Scanner.TriggerType.HARD;
+                if (!getScanner().isReadPending()) {
+                    getScanner().read();
+                }
+            } else {
+                getScanner().triggerType = com.symbol.emdk.barcode.Scanner.TriggerType.SOFT_ALWAYS;
+                if (getScanner().isReadPending()) {
+                    getScanner().cancelRead();
+                }
+            }
         } catch (ScannerException e) {
             e.printStackTrace();
         }
@@ -119,32 +118,37 @@ class Scanner extends AbstractScanner {
         return emdkManager != null;
     }
 
+    @NonNull
+    @Override
+    public String[] getPermissions() {
+        return new String[] { "com.symbol.emdk.permission.EMDK" };
+    }
+
+    @Override
+    public void close() {
+        if (mScanner != null) {
+            try {
+                mScanner.disable();
+                mScanner.release();
+            } catch (ScannerException e) {
+                e.printStackTrace();
+            }
+            mScanner = null;
+        }
+        if (emdkManager != null) {
+            emdkManager.release();
+            emdkManager = null;
+        }
+    }
+
     private com.symbol.emdk.barcode.Scanner getScanner() {
         return mScanner == null && emdkManager != null ? (mScanner = ((BarcodeManager) emdkManager.getInstance(EMDKManager.FEATURE_TYPE.BARCODE)).getDevice(BarcodeManager.DeviceIdentifier.DEFAULT)) : mScanner;
     }
 
     @Override
     public void onResume() {
-        if (emdkManager == null)
-            getEmdkManager();
+        super.onResume();
         if (mScanner == null)
             getScanner();
-    }
-
-    @Override
-    public void onPause() {
-        if (emdkManager != null) {
-            mScanner = null;
-            emdkManager.release();
-            emdkManager = null;
-        }
-    }
-
-    @Override
-    public void onDestroy() {
-        if (emdkManager != null) {
-            emdkManager.release();
-            emdkManager = null;
-        }
     }
 }

@@ -5,6 +5,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.RemoteException;
+
+import android.support.annotation.NonNull;
 import android.view.KeyEvent;
 
 import device.common.DecodeResult;
@@ -15,24 +17,35 @@ import device.sdk.DeviceServer;
 class Scanner extends AbstractScanner {
     private static final String TAG = Scanner.class.getCanonicalName();
     private static final String READ_FAIL_SYMBOL = "READ_FAIL";
-    private final DecodeResult mDecodeResult = new DecodeResult();
-    private IScannerService mScanner;
-    private int keysDown;
-    private final IntentFilter resultFilter = new IntentFilter(ScanConst.INTENT_USERMSG);
-    private final BroadcastReceiver mResultReceiver = new BroadcastReceiver() {
+    private static final DecodeResult DECODE_RESULT;
+    static {
+        DecodeResult temp = null;
+        try {
+            temp = new DecodeResult();
+        } catch (NoClassDefFoundError ignored) { }
+        DECODE_RESULT = temp;
+    }
+    private static IScannerService mScanner;
+    private static int keysDown;
+    private static final IntentFilter SCAN_RESULT_EVENT_FILTER = new IntentFilter(ScanConst.INTENT_USERMSG);
+    private static final BroadcastReceiver SCAN_RESULT_EVENT_RECEIVER = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             try {
-                getScanner().aDecodeGetResult(mDecodeResult.recycle());
-                if (!READ_FAIL_SYMBOL.equals(mDecodeResult.symName))
-                    onBarcodeScanned(mDecodeResult.toString());
-            } catch (RemoteException | SecurityException e) {
+                if (DECODE_RESULT != null) {
+                    getScanner().aDecodeGetResult(DECODE_RESULT.recycle());
+                    if (!READ_FAIL_SYMBOL.equals(DECODE_RESULT.symName)) {
+                        onBarcodeScanned(DECODE_RESULT.toString());
+                    }
+                }
+            } catch (RemoteException | SecurityException | NoClassDefFoundError e) {
                 e.printStackTrace();
             }
         }
     };
 
-    private final BroadcastReceiver mScanKeyEventReceiver = new BroadcastReceiver() {
+    private static final IntentFilter SCAN_KEY_EVENT_FILTER = new IntentFilter(ScanConst.INTENT_USERMSG);
+    private static final BroadcastReceiver SCAN_KEY_EVENT_RECEIVER = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             if (ScanConst.INTENT_SCANKEY_EVENT.equals(intent.getAction())) {
@@ -60,7 +73,7 @@ class Scanner extends AbstractScanner {
                             } else {
                                 getScanner().aDecodeSetTriggerOn(0);
                             }
-                        } catch (RemoteException | SecurityException e) {
+                        } catch (RemoteException | SecurityException | NoClassDefFoundError e) {
                             e.printStackTrace();
                         }
                 }
@@ -68,33 +81,26 @@ class Scanner extends AbstractScanner {
         }
     };
 
-    private IScannerService getScanner() {
+    private static IScannerService getScanner() {
         return mScanner != null ? mScanner : (mScanner = DeviceServer.getIScannerService());
     }
 
     @Override
     public boolean init() {
+        if (DECODE_RESULT == null)
+            return false;
         try {
             getScanner().aDecodeAPIInit();
             return true;
-        } catch (RemoteException | SecurityException ignored) { }
+        } catch (RemoteException | SecurityException | NoClassDefFoundError ignored) { }
         return false;
     }
 
     @Override
-    public void enable() {
+    public void onIsEnabledChanged(boolean isEnabled) {
         try {
-            getScanner().aDecodeSetTriggerEnable(1);
-        } catch (RemoteException e) {
-            e.printStackTrace();
-        }
-    }
-
-    @Override
-    public void disable() {
-        try {
-            getScanner().aDecodeSetTriggerEnable(0);
-        } catch (RemoteException e) {
+            getScanner().aDecodeSetTriggerEnable(isEnabled ? 1 : 0);
+        } catch (RemoteException | SecurityException | NoClassDefFoundError e) {
             e.printStackTrace();
         }
     }
@@ -104,13 +110,41 @@ class Scanner extends AbstractScanner {
         return getScanner() != null;
     }
 
+    @NonNull
+    @Override
+    public String[] getPermissions() {
+        return new String[0];
+    }
+
+    @Override
+    public void close() {
+        if (getApplicationContext() != null) {
+            try {
+                getApplicationContext().unregisterReceiver(SCAN_RESULT_EVENT_RECEIVER);
+            } catch (IllegalArgumentException ignored) { }
+
+            try {
+                getApplicationContext().unregisterReceiver(SCAN_KEY_EVENT_RECEIVER);
+            } catch (IllegalArgumentException ignored) { }
+        }
+
+        try {
+            getScanner().aDecodeSetTriggerEnable(1);
+            getScanner().aDecodeSetTriggerOn(0);
+            getScanner().aDecodeAPIDeinit();
+        } catch (RemoteException | SecurityException | NoClassDefFoundError e) {
+            e.printStackTrace();
+        }
+    }
+
     @Override
     public void onResume() {
+        super.onResume();
         keysDown = 0;
 
         if (getApplicationContext() != null) {
-            getApplicationContext().registerReceiver(mResultReceiver, resultFilter);
-            getApplicationContext().registerReceiver(mScanKeyEventReceiver, new IntentFilter(ScanConst.INTENT_SCANKEY_EVENT));
+            getApplicationContext().registerReceiver(SCAN_RESULT_EVENT_RECEIVER, SCAN_RESULT_EVENT_FILTER);
+            getApplicationContext().registerReceiver(SCAN_KEY_EVENT_RECEIVER, SCAN_KEY_EVENT_FILTER);
         }
 
         try {
@@ -118,51 +152,13 @@ class Scanner extends AbstractScanner {
             getScanner().aDecodeSetBeepEnable(0);
             getScanner().aDecodeSetVibratorEnable(0);
             getScanner().aDecodeSetDecodeEnable(1);
-            getScanner().aDecodeSetTriggerEnable(1);
             getScanner().aDecodeSetTerminator(ScanConst.Terminator.DCD_TERMINATOR_NONE);
             getScanner().aDecodeSetResultType(ScanConst.ResultType.DCD_RESULT_USERMSG);
             getScanner().aDecodeSetTriggerMode(ScanConst.TriggerMode.DCD_TRIGGER_MODE_ONESHOT);
             getScanner().aDecodeSetPrefixEnable(0);
             getScanner().aDecodeSetPostfixEnable(0);
-        } catch (RemoteException | SecurityException e) {
-            e.printStackTrace();
-        }
-    }
-
-    @Override
-    public void onPause() {
-        if (getApplicationContext() != null) {
-            try {
-                getApplicationContext().unregisterReceiver(mResultReceiver);
-            } catch (IllegalArgumentException ignored) { }
-
-            try {
-                getApplicationContext().unregisterReceiver(mScanKeyEventReceiver);
-            } catch (IllegalArgumentException ignored) { }
-        }
-
-        try {
-            getScanner().aDecodeSetTriggerOn(0);
-        } catch (RemoteException | SecurityException e) {
-            e.printStackTrace();
-        }
-    }
-
-    @Override
-    public void onDestroy() {
-        if (getApplicationContext() != null) {
-            try {
-                getApplicationContext().unregisterReceiver(mResultReceiver);
-            } catch (IllegalArgumentException ignored) { }
-
-            try {
-                getApplicationContext().unregisterReceiver(mScanKeyEventReceiver);
-            } catch (IllegalArgumentException ignored) { }
-        }
-
-        try {
-            getScanner().aDecodeSetTriggerOn(0);
-        } catch (RemoteException | SecurityException e) {
+            onIsEnabledChanged(getIsEnabled());
+        } catch (RemoteException | SecurityException | NoClassDefFoundError e) {
             e.printStackTrace();
         }
     }

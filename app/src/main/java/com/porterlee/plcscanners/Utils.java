@@ -8,7 +8,7 @@ import android.os.Vibrator;
 import org.jetbrains.annotations.NotNull;
 
 public class Utils {
-    private static long[] vibrationPattern = { 0L, 100L, 100L, 100L };
+    private static long[] vibrationPattern = { 0L, 150L, 100L, 150L };
 
     public static void setVibrationPattern(long[] vibrationPattern) {
         Utils.vibrationPattern = vibrationPattern;
