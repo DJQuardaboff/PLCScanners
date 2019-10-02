@@ -1,62 +1,99 @@
+import org.apache.commons.io.FilenameUtils
+
+import java.nio.file.Paths
+
 apply plugin: 'com.android.library'
+apply from: 'scanner_sdks.gradle'
+apply from: 'version.gradle'
 
 android {
-    def VERSION_CODE = 5
-    def VERSION_NAME = "1.4"
-
+    compileSdkVersion 29
+    buildToolsVersion '29.0.1'
     defaultConfig {
-        targetSdkVersion 27
-        versionCode VERSION_CODE
-        versionName VERSION_NAME
-        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+        targetSdkVersion 29
+        minSdkVersion 17
+        versionCode generateVersionCode(plc_version)
+        versionName generateVersionName(plc_version)
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
     buildTypes {
         release {
             //minifyEnabled false
             //proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            debuggable false
         }
         debug {
             debuggable true
         }
     }
-    flavorDimensions "scanner_sdk"
-    productFlavors {
-        janam_XM5 {
-            buildConfigField "java.util.List<String>", "COMPATIBLE_MANUFACTURERS", "java.util.Arrays.asList(\"Janam Technologies\")"
-            buildConfigField "java.util.List<String>", "COMPATIBLE_MODELS", "java.util.Arrays.asList(\"XM5\")"
-            buildConfigField "boolean", "REQUIRES_SETUP", "false"
-            compileSdkVersion 26
-            minSdkVersion 17
-        }
-        janam_XT2_XT2__XM75_XT100_XG200 {
-            buildConfigField "java.util.List<String>", "COMPATIBLE_MANUFACTURERS", "java.util.Arrays.asList( \"Janam\" )"
-            buildConfigField "java.util.List<String>", "COMPATIBLE_MODELS", "java.util.Arrays.asList( \"XM75\" )"
-            buildConfigField "boolean", "REQUIRES_SETUP", "false"
-            compileSdkVersion 26
-            minSdkVersion 17
-        }
-        zebra_emdk_symbol_26 {
-            buildConfigField "java.util.List<String>", "COMPATIBLE_MANUFACTURERS", "java.util.Arrays.asList( \"Zebra Technologies\" )"
-            buildConfigField "java.util.List<String>", "COMPATIBLE_MODELS", "java.util.Arrays.asList( \"TC20\" )"
-            buildConfigField "boolean", "REQUIRES_SETUP", "false"
-            compileSdkVersion 'Zebra Technologies Corp:EMDK APIs:26'
-            minSdkVersion 17
-        }
+    flavorDimensions 'scanner_sdk'
+    for (def sdk : scanner_sdks) {
+        productFlavors.create(sdk.key, {
+            dimension 'scanner_sdk'
+            def settings = sdk.value
+            buildConfigField 'String[]', 'COMPATIBLE_MANUFACTURERS', settings.compatibleManufacturers ? "{\"${settings.compatibleManufacturers.join('", "')}\"}" : 'null'
+            buildConfigField 'String[]', 'COMPATIBLE_MODELS', settings.compatibleModels ? "{\"${settings.compatibleModels.join('", "')}\"}" : 'null'
+        })
     }
-    android.libraryVariants.all { variant ->
-        variant.outputs.all {
-            outputFileName = "plc_scanners-${variant.name}-${VERSION_NAME}.aar"
-        }
+    libraryVariants.all {
+        variant ->
+            variant.outputs.all {
+                outputFileName = "plc_scanners-${variant.name}-v${variant.mergedFlavor.versionName}.aar"
+            }
+    }
+
+    def publishAll = project.tasks.create("publishAll")
+    def publishBuildTypes = new HashMap<String, Task>()
+    buildTypes.each {
+        buildType ->
+            def taskName = "publish" + buildType.name.capitalize()
+            publishBuildTypes.put(buildType.name, project.tasks.create(taskName))
+    }
+    libraryVariants.all {
+        variant ->
+            def inFile
+            variant.outputs.all {
+                variantOutput ->
+                    inFile = variantOutput.outputFile
+            }
+            if (inFile != null) {
+                String outName = "plc_scanners-${variant.flavorName}-v${variant.mergedFlavor.versionName}"
+                if (variant.buildType.debuggable) outName += '-debug'
+                def task = project.tasks.create("publish${variant.name.capitalize()}") {
+                    task ->
+                        task.dependsOn variant.assembleProvider
+                        task.doLast {
+                            copy {
+                                from inFile
+                                into buildDir
+                                rename(FilenameUtils.getBaseName(inFile.name), outName)
+                            }
+                        }
+                }
+                publishAll.dependsOn task
+                publishBuildTypes[variant.buildType.name].dependsOn task
+            }
     }
 }
 
 dependencies {
-    janam_XM5Implementation project(':janam_XM5_ANDROID_SDK_V1.7')
-    janam_XT2_XT2__XM75_XT100_XG200Implementation project(':janam_XT2_XT2+_XM75_XT100_XG200_ANDROID_SDK_V3.2.1')
-    implementation 'com.android.support:appcompat-v7:27.1.1'
+    janam_xm5Implementation project(':janam_XM5_ANDROID_SDK_V1.7')
+    janamImplementation project(':janam_XT2_XT2+_XM75_XT100_XG200_ANDROID_SDK_V3.2.1')
+    zebraImplementation 'com.symbol:emdk:7.3.14'
+    implementation 'androidx.appcompat:appcompat:1.0.2'
     testImplementation 'junit:junit:4.12'
-    androidTestImplementation 'com.android.support.test:runner:1.0.2'
-    androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
+    androidTestImplementation 'androidx.test:runner:1.2.0'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.2.0'
     implementation 'org.jetbrains:annotations-java5:15.0'
+}
+
+private static int generateVersionCode(def version) {
+    return (version.major * 10000) + (version.minor * 100) + version.patch
+}
+
+private static String generateVersionName(def version) {
+    String versionName = "${version.major}.${version.minor}.${version.patch}"
+    if (version.suffix != null) {
+        versionName += "-" + version.suffix
+    }
+    return versionName
 }

@@ -1,0 +1,16 @@
+ext.scanner_sdks = [
+        janam_xm5: [
+                compatibleManufacturers: ['Janam Technologies'],
+                compatibleModels: ['XM5'],
+        ],
+
+        janam: [
+                compatibleManufacturers: ['Janam'],
+                compatibleModels: ['XM75'],
+        ],
+
+        zebra: [
+                compatibleManufacturers: ['Zebra Technologies'],
+                compatibleModels: [],
+        ],
+]

@@ -7,8 +7,8 @@ import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Build;
-import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -89,8 +89,26 @@ public abstract class AbstractScanner implements Closeable {
         return activityWeakReference != null ? (activityWeakReference.get() != null ? activityWeakReference.get().getApplicationContext() : null) : null;
     }
 
+    public static boolean isCompatibleManufacturer() {
+        if (BuildConfig.COMPATIBLE_MANUFACTURERS != null) {
+            for (String manufacturer : BuildConfig.COMPATIBLE_MANUFACTURERS) {
+                if (manufacturer.equals(Build.MANUFACTURER)) return true;
+            }
+        }
+        return false;
+    }
+
+    public static boolean isCompatibleModel() {
+        if (BuildConfig.COMPATIBLE_MODELS != null) {
+            for (String manufacturer : BuildConfig.COMPATIBLE_MODELS) {
+                if (manufacturer.equals(Build.MODEL)) return true;
+            }
+        }
+        return false;
+    }
+
     public static boolean isCompatible() {
-        return BuildConfig.COMPATIBLE_MANUFACTURERS.contains(Build.MANUFACTURER) && BuildConfig.COMPATIBLE_MODELS.contains(Build.MODEL);
+        return isCompatibleManufacturer() && isCompatibleModel();
     }
 
     protected static void toast(final String message, final int length) {

@@ -5,18 +5,18 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.RemoteException;
-
-import android.support.annotation.NonNull;
+import android.os.ServiceManager;
+import androidx.annotation.NonNull;
 import android.view.KeyEvent;
 
-import device.common.DecodeResult;
-import device.common.IScannerService;
-import device.common.ScanConst;
-import device.sdk.DeviceServer;
+import device.scanner.DecodeResult;
+import device.scanner.IScannerService;
+import device.scanner.ScanConst;
+import device.scanner.ScannerService;
 
 class Scanner extends AbstractScanner {
     private static final String TAG = Scanner.class.getCanonicalName();
-    private static final String READ_FAIL_SYMBOL = "READ_FAIL";
+    private static final String READ_FAIL_SYMBOL = "READ FAIL";
     private static final DecodeResult DECODE_RESULT;
     static {
         DecodeResult temp = null;
@@ -25,17 +25,17 @@ class Scanner extends AbstractScanner {
         } catch (NoClassDefFoundError ignored) { }
         DECODE_RESULT = temp;
     }
-    private static IScannerService mScanner;
-    private static int keysDown;
+    private IScannerService mScanner;
+    private int keysDown;
     private static final IntentFilter SCAN_RESULT_EVENT_FILTER = new IntentFilter(ScanConst.INTENT_USERMSG);
-    private static final BroadcastReceiver SCAN_RESULT_EVENT_RECEIVER = new BroadcastReceiver() {
+    private final BroadcastReceiver SCAN_RESULT_EVENT_RECEIVER = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             try {
                 if (DECODE_RESULT != null) {
-                    getScanner().aDecodeGetResult(DECODE_RESULT.recycle());
+                    getScanner().aDecodeGetResult(DECODE_RESULT);
                     if (!READ_FAIL_SYMBOL.equals(DECODE_RESULT.symName)) {
-                        String barcode = DECODE_RESULT.toString();
+                        String barcode = DECODE_RESULT.decodeValue;
                         onBarcodeScanned(barcode == null ? "" : barcode);
                     }
                 }
@@ -45,8 +45,8 @@ class Scanner extends AbstractScanner {
         }
     };
 
-    private static final IntentFilter SCAN_KEY_EVENT_FILTER = new IntentFilter(ScanConst.INTENT_USERMSG);
-    private static final BroadcastReceiver SCAN_KEY_EVENT_RECEIVER = new BroadcastReceiver() {
+    private static final IntentFilter SCAN_KEY_EVENT_FILTER = new IntentFilter(ScanConst.INTENT_SCANKEY_EVENT);
+    private final BroadcastReceiver SCAN_KEY_EVENT_RECEIVER = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             if (ScanConst.INTENT_SCANKEY_EVENT.equals(intent.getAction())) {
@@ -82,8 +82,8 @@ class Scanner extends AbstractScanner {
         }
     };
 
-    private static IScannerService getScanner() {
-        return mScanner != null ? mScanner : (mScanner = DeviceServer.getIScannerService());
+    private IScannerService getScanner() {
+        return mScanner != null ? mScanner : (mScanner = IScannerService.Stub.asInterface(ServiceManager.getService("ScannerService")));
     }
 
     @Override
@@ -153,9 +153,9 @@ class Scanner extends AbstractScanner {
             getScanner().aDecodeSetBeepEnable(0);
             getScanner().aDecodeSetVibratorEnable(0);
             getScanner().aDecodeSetDecodeEnable(1);
-            getScanner().aDecodeSetTerminator(ScanConst.Terminator.DCD_TERMINATOR_NONE);
-            getScanner().aDecodeSetResultType(ScanConst.ResultType.DCD_RESULT_USERMSG);
-            getScanner().aDecodeSetTriggerMode(ScanConst.TriggerMode.DCD_TRIGGER_MODE_ONESHOT);
+            getScanner().aDecodeSetTerminator(ScannerService.Terminator.DCD_TERMINATOR_NONE);
+            getScanner().aDecodeSetResultType(ScannerService.ResultType.DCD_RESULT_USERMSG);
+            getScanner().aDecodeSetTriggerMode(ScannerService.TriggerMode.DCD_TRIGGER_MODE_ONESHOT);
             getScanner().aDecodeSetPrefixEnable(0);
             getScanner().aDecodeSetPostfixEnable(0);
             onIsEnabledChanged(getIsEnabled());
